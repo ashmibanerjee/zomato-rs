@@ -162,3 +162,5 @@ cython_debug/
 .idea/
 data/Zomato_Kolkata.csv
 data/embeddings
+data/.ipynb_checkpoints
+notebooks/.ipynb_checkpoints
