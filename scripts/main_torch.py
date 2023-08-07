@@ -3,32 +3,23 @@ import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from sentence_transformers import SentenceTransformer, util
 from pathlib import Path
-import os, ast
-from typing import List
+import os
 import torch
 
 DATA_FILE_PATH = os.getcwd() + "/../data/Zomato_cleaned.csv"
 MODEL = "all-MiniLM-L6-v2"
-# FEATURE_VECTOR = ["voteCount", "rating", "cost", "combined_text"]
-FEATURE_VECTOR = ["combined_text"]
 
 
-def compute_text_embeddings(df: pd.DataFrame, model_name: str, features: List) -> pd.DataFrame:
-    names = df["name"]
-    df["combined_text"] = df["cuisine"] + " " + df["timing"]
-    df.drop(columns=["cuisine", "timing"], inplace=True)
+def compute_text_embeddings(df: pd.DataFrame, model_name: str) -> pd.DataFrame:
     model = SentenceTransformer(model_name)
 
     print("inside compute embeddings: ", df.shape)
     features_to_encode = df["combined_text"].values
     print(df.shape)
-    print(features_to_encode)
 
     embeddings = model.encode(features_to_encode)
 
     df["embeddings"] = embeddings.tolist()
-    df["embeddings"] = df["embeddings"].to_numpy()
-
     file_name = f"{model_name}_zomato_embeddings.csv"
     file_path = f"{os.getcwd()}/../data/embeddings/{file_name}"
     print(file_path)
@@ -43,19 +34,14 @@ def load_embeddings(file_path: str) -> pd.DataFrame:
     return embeddings_df
 
 
-def get_text_embeddings(df: pd.DataFrame, model_name: str, features: List) -> pd.DataFrame:
+def get_text_embeddings(df: pd.DataFrame, model_name: str) -> pd.DataFrame:
     file_name = f"{model_name}_zomato_embeddings.csv"
     file_path = Path(f"{os.getcwd()}/../data/embeddings/{file_name}")
 
     if file_path.is_file():
         embeddings_df = load_embeddings(file_path)
     else:
-        embeddings_df = compute_text_embeddings(df, model_name, features)
-    try:
-        # transforming them from str to numpy ndarray
-        embeddings_df["embeddings"] = embeddings_df["embeddings"].apply(lambda x: np.array(ast.literal_eval(x)))
-    except ValueError as e:
-        print(e)
+        embeddings_df = compute_text_embeddings(df, model_name)
     return embeddings_df
 
 
@@ -78,23 +64,23 @@ def compute_cosine_sim(query_vector, remaining_vector):
 
 
 def convert_to_tensor(query_vals, remaining_vals):
-    if type(query_vals) == list:
-        query_embeddings = torch.tensor(query_vals)
+
+    if type(query_vals) is list:
+        query_embeddings = torch.FloatTensor(query_vals).float()
     else:
         query_embeddings = torch.from_numpy(query_vals)
     remaining_embeddings = np.vstack(remaining_vals).astype(float)
-    remaining_embeddings = torch.from_numpy(remaining_embeddings)
+    remaining_embeddings = torch.from_numpy(remaining_embeddings).float()
     return query_embeddings, remaining_embeddings
 
 
 def recommend(query_name: str, df: pd.DataFrame):
-
-    embeddings_df = get_text_embeddings(df, MODEL, FEATURE_VECTOR)
+    df["combined_text"] = df["cuisine"] + " " + df["timing"] + " " + str(df["cost"]) + " " + str(df["rating"])
+    embeddings_df = get_text_embeddings(df[["name", "combined_text"]], MODEL)
 
     query_cuisine = df.loc[df["name"] == query_name]["cuisine"].values[0]
     print(f"recommendations similar to {query_name} of {query_cuisine} cuisine are as follows \n")
     df_remaining = df.loc[df["name"] != query_name]
-    # df_scaled = rescale_numeric_columns(df_remaining)
 
     query_embeddings = embeddings_df.loc[embeddings_df["name"] == query_name]["embeddings"].values[0]
     remaining_embeddings = embeddings_df.loc[embeddings_df["name"] != query_name]["embeddings"].values
@@ -111,8 +97,8 @@ def recommend(query_name: str, df: pd.DataFrame):
 
 def main():
     data = pd.read_csv(DATA_FILE_PATH, sep=",")
-    recommendations = recommend("Super Star Haji Biriyani", data)
-    print(recommendations[["name", "cuisine", "sim_scores"]].head())
+    recommendations = recommend("New Arsalaan Biryani", data)
+    print(recommendations[["name", "cuisine", "rating", "sim_scores"]].head())
 
 
 if __name__ == '__main__':
