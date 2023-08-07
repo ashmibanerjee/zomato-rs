@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from sentence_transformers import SentenceTransformer, util
 from pathlib import Path
-import os
+import os,ast
 import torch
 
 DATA_FILE_PATH = os.getcwd() + "/../data/Zomato_cleaned.csv"
@@ -20,6 +20,8 @@ def compute_text_embeddings(df: pd.DataFrame, model_name: str) -> pd.DataFrame:
     embeddings = model.encode(features_to_encode)
 
     df["embeddings"] = embeddings.tolist()
+    df["embeddings"] = df["embeddings"].to_numpy()
+
     file_name = f"{model_name}_zomato_embeddings.csv"
     file_path = f"{os.getcwd()}/../data/embeddings/{file_name}"
     print(file_path)
@@ -40,6 +42,7 @@ def get_text_embeddings(df: pd.DataFrame, model_name: str) -> pd.DataFrame:
 
     if file_path.is_file():
         embeddings_df = load_embeddings(file_path)
+        embeddings_df["embeddings"] = embeddings_df["embeddings"].apply(lambda x: np.array(ast.literal_eval(x)))
     else:
         embeddings_df = compute_text_embeddings(df, model_name)
     return embeddings_df
@@ -68,7 +71,7 @@ def convert_to_tensor(query_vals, remaining_vals):
     if type(query_vals) is list:
         query_embeddings = torch.FloatTensor(query_vals).float()
     else:
-        query_embeddings = torch.from_numpy(query_vals)
+        query_embeddings = torch.from_numpy(query_vals).float()
     remaining_embeddings = np.vstack(remaining_vals).astype(float)
     remaining_embeddings = torch.from_numpy(remaining_embeddings).float()
     return query_embeddings, remaining_embeddings
